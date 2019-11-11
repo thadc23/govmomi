@@ -1,0 +1,21 @@
+---
+platform: linux
+
+image_resource:
+  type: docker-image
+  source:
+    repository: golang
+    tag: latest
+
+inputs:
+  - name: govmomi
+  - name: version
+
+outputs:
+  - name: release
+
+params:
+  DRAFT: false
+
+run:
+  path: govmomi/ci/tasks/build/task.sh

@@ -1,0 +1,184 @@
+resource_types:
+- name: pull-request
+  type: docker-image
+  source:
+    repository: teliaoss/github-pr-resource
+
+resources:
+- name: pull-request
+  type: pull-request
+  check_every: 1m
+  source:
+    repository: thadc23/govmomi
+    access_token: ((github-access-token))
+
+- name: govmomi
+  type: git
+  source:
+    branch: master
+    private_key: ((git_repo_deploy_key))
+    uri: git@github.com:thadc23/govmomi.git
+
+- name: final-release
+  type: github-release
+  source:
+    owner: thadc23
+    repository: govmomi
+    access_token: ((github-access-token))
+
+- name: pre-release
+  type: github-release
+  source:
+    owner: thadc23
+    repository: govmomi
+    access_token: ((github-access-token))
+    release: false
+    pre_release: true
+
+- name: version
+  type: semver
+  source:
+    initial_version: 0.0.0
+    driver: git
+    uri: git@github.com:thadc23/govmomi.git
+    branch: versions
+    file: version
+    private_key: ((git_repo_deploy_key))
+
+jobs:
+- name: test
+  plan:
+  - in_parallel:
+    - get: pull-request
+      trigger: true
+      version: every
+    - get: version
+
+  - put: pull-request
+    params:
+      path: pull-request
+      status: pending
+
+  - do:
+      - task: unit-test
+        config:
+          platform: linux
+          image_resource:
+            type: docker-image
+            source: {repository: golang, tag: "latest"}
+          inputs:
+            - name: pull-request
+          run:
+            path: /bin/bash
+            args:
+              - -xce
+              - |
+                pushd pull-request
+                go test ./...
+                popd
+      - task: build
+        file: pull-request/ci/tasks/build/task.yml
+        input_mapping:
+          govmomi: pull-request
+    on_failure:
+      put: pull-request
+      params:
+        path: pull-request
+        status: failure
+
+  - put: pull-request
+    params:
+      path: pull-request
+      status: success
+
+- name: pre-release
+  plan:
+  - in_parallel:
+    - get: govmomi
+      trigger: true
+    - get: version
+
+  - task: build
+    file: govmomi/ci/tasks/build/task.yml
+    params:
+      DRAFT: true
+
+  - put: version
+    params:
+      file: release/tag
+
+  - put: pre-release
+    params:
+      name: release/name
+      tag: release/tag
+      globs:
+      - release/govc*
+
+- name: patch-release
+  plan:
+  - in_parallel:
+    - get: govmomi
+    - get: version
+      params:
+        bump: patch
+    - get: pre-release
+
+  - in_parallel:
+    - task: write-name
+      file: govmomi/ci/tasks/write-name/task.yml
+    - put: version
+      params:
+        file: version/version
+
+  - put: final-release
+    params:
+      name: release-name/name
+      tag: version/version
+      globs:
+      - pre-release/govc*
+
+- name: minor-release
+  plan:
+  - in_parallel:
+    - get: govmomi
+    - get: version
+      params:
+        bump: minor
+    - get: pre-release
+
+  - in_parallel:
+    - task: write-name
+      file: govmomi/ci/tasks/write-name/task.yml
+    - put: version
+      params:
+        file: version/version
+
+  - put: final-release
+    params:
+      name: release-name/name
+      tag: version/version
+      globs:
+      - pre-release/govc*
+
+- name: major-release
+  plan:
+  - in_parallel:
+    - get: govmomi
+    - get: version
+      params:
+        bump: major
+    - get: pre-release
+
+  - in_parallel:
+    - task: write-name
+      file: govmomi/ci/tasks/write-name/task.yml
+    - put: version
+      params:
+        file: version/version
+
+  - put: final-release
+    params:
+      name: release-name/name
+      tag: version/version
+      globs:
+      - pre-release/govc*
