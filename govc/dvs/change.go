@@ -36,6 +36,8 @@ type change struct {
 	configSpec *types.VMwareDVSConfigSpec
 }
 
+var dProtocol string
+
 func init() {
 	cli.Register("dvs.change", &change{})
 }
@@ -45,15 +47,13 @@ func (cmd *change) Register(ctx context.Context, f *flag.FlagSet) {
 	cmd.DatacenterFlag.Register(ctx, f)
 
 	cmd.configSpec = new(types.VMwareDVSConfigSpec)
-	cmd.configSpec.LinkDiscoveryProtocolConfig = new(types.LinkDiscoveryProtocolConfig)
-	cmd.configSpec.LinkDiscoveryProtocolConfig.Operation = "listen"
 
 	cmd.DVSCreateSpec.ConfigSpec = cmd.configSpec
 	cmd.DVSCreateSpec.ProductInfo = new(types.DistributedVirtualSwitchProductSpec)
 
 	f.StringVar(&cmd.ProductInfo.Version, "product-version", "", "DVS product version")
 	f.Var(flags.NewInt32(&cmd.configSpec.MaxMtu), "mtu", "DVS Max MTU")
-	f.StringVar(&cmd.configSpec.LinkDiscoveryProtocolConfig.Protocol, "discovery-protocol", "", "Link Discovery Protocol")
+	f.StringVar(&dProtocol, "discovery-protocol", "", "Link Discovery Protocol")
 }
 
 func (cmd *change) Usage() string {
@@ -104,6 +104,14 @@ func (cmd *change) Run(ctx context.Context, f *flag.FlagSet) error {
 	}
 
 	cmd.configSpec.ConfigVersion = s.Config.GetDVSConfigInfo().ConfigVersion
+
+	if dProtocol != "" {
+		cmd.configSpec.LinkDiscoveryProtocolConfig = &types.LinkDiscoveryProtocolConfig{
+			Protocol:  dProtocol,
+			Operation: "listen",
+		}
+	}
+
 	task, err := dvs.Reconfigure(ctx, cmd.ConfigSpec)
 	if err != nil {
 		return err
