@@ -45,12 +45,15 @@ func (cmd *change) Register(ctx context.Context, f *flag.FlagSet) {
 	cmd.DatacenterFlag.Register(ctx, f)
 
 	cmd.configSpec = new(types.VMwareDVSConfigSpec)
+	cmd.configSpec.LinkDiscoveryProtocolConfig = new(types.LinkDiscoveryProtocolConfig)
+	cmd.configSpec.LinkDiscoveryProtocolConfig.Operation = "listen"
 
 	cmd.DVSCreateSpec.ConfigSpec = cmd.configSpec
 	cmd.DVSCreateSpec.ProductInfo = new(types.DistributedVirtualSwitchProductSpec)
 
 	f.StringVar(&cmd.ProductInfo.Version, "product-version", "", "DVS product version")
 	f.Var(flags.NewInt32(&cmd.configSpec.MaxMtu), "mtu", "DVS Max MTU")
+	f.StringVar(&cmd.configSpec.LinkDiscoveryProtocolConfig.Protocol, "discovery-protocol", "", "Link Discovery Protocol")
 }
 
 func (cmd *change) Usage() string {
@@ -62,7 +65,8 @@ func (cmd *change) Description() string {
 
 Examples:
   govc dvs.change -product-version 5.5.0 DSwitch
-  govc dvs.change -mtu 9000 DSwitch`
+	govc dvs.change -mtu 9000 DSwitch
+	govc dvs.change -discovery-protocol [lldp|cdp] DSwitch`
 }
 
 func (cmd *change) Process(ctx context.Context) error {
